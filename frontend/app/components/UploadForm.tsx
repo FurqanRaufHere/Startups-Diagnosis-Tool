@@ -7,7 +7,7 @@ type AnalyzeResponse = {
   report_id: string;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
 export default function UploadForm() {
   const router = useRouter();
@@ -54,6 +54,8 @@ export default function UploadForm() {
       router.push(`/report/${data.report_id}`);
     } catch (uploadError) {
       const message = uploadError instanceof Error ? uploadError.message : "Unknown error";
+      console.error("Upload error details:", uploadError);
+      console.error("API_BASE:", API_BASE);
       setError(`Could not complete analysis: ${message}`);
     } finally {
       setIsLoading(false);
