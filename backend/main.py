@@ -2,17 +2,22 @@ import json
 import logging
 import shutil
 import uuid
+import os
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import asyncio
+import tempfile
+import io
 
 from db import init_db, get_db, Report
 from pipeline import run_pipeline
+from utils.memo_generator import generate_memo_pdf
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,7 +26,8 @@ app = FastAPI(title="Due Diligence Copilot")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],  # Allow all origins for now (permissive for debugging)
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -105,6 +111,41 @@ async def get_report(report_id: str, db: AsyncSession = Depends(get_db)):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report.to_dict()
+
+
+@app.get("/report/{report_id}/pdf")
+async def download_report_pdf(report_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    report_dict = report.to_dict()
+    
+    # Generate PDF in a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        pdf_path = tmp.name
+    
+    try:
+        generate_memo_pdf(report_dict, pdf_path)
+        
+        # Read the PDF file into memory
+        with open(pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+        
+        # Clean up temp file
+        os.unlink(pdf_path)
+        
+        # Return as StreamingResponse
+        return StreamingResponse(
+            iter([pdf_bytes]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{report.startup_name or "startup"}-report.pdf"'}
+        )
+    except Exception as e:
+        logger.error(f"PDF generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+
 
 
 @app.get("/reports")
