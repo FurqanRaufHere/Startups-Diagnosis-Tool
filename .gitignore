@@ -1,0 +1,14 @@
+.env
+__pycache__/
+a/
+backend/uploads/
+backend/reports.db
+
+backend/.env
+backend/uploads/
+backend/reports.db
+backend/__pycache__/
+backend/**/__pycache__/
+frontend/.env.local
+frontend/.next/
+frontend/node_modules/
